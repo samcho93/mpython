@@ -1,0 +1,13 @@
+{
+  "name": "MPython Web IDE",
+  "short_name": "MPython",
+  "description": "스마트폰에서 Raspberry Pi Pico, micro:bit 를 MicroPython 으로 코딩하고 실행",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1e2430",
+  "theme_color": "#1e2430",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
