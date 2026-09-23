@@ -96,9 +96,12 @@ const MICROBIT_API = {
 for (let i = 0; i <= 20; i++) MICROBIT_API.members['pin' + i] = MICROBIT_API.classes.MicroBitPin;
 
 // ---------------- 예제 템플릿 ----------------
+// 보드 LED(Pin("LED")/GP25) 가 없거나 GP16 을 다른 용도로 쓰는 보드
+const NO_ONBOARD_LED = ['rp2040-zero'];
+
 const PICO_TEMPLATES = [
   {
-    id: 'blink', title: '내장 LED 깜빡이기', desc: 'machine.Pin 으로 보드 LED 제어', code:
+    id: 'blink', exclude: NO_ONBOARD_LED, title: '내장 LED 깜빡이기', desc: 'machine.Pin 으로 보드 LED 제어', code:
 `from machine import Pin
 import time
 
@@ -152,7 +155,7 @@ while True:
     time.sleep(0.2)
 ` },
   {
-    id: 'button', title: '버튼 입력 + 인터럽트', desc: 'GP14 버튼을 누르면 LED 토글', code:
+    id: 'button', exclude: NO_ONBOARD_LED, title: '버튼 입력 + 인터럽트', desc: 'GP14 버튼을 누르면 LED 토글', code:
 `from machine import Pin
 import time
 
@@ -175,7 +178,7 @@ while True:
     time.sleep(1)
 ` },
   {
-    id: 'timer', title: 'Timer 주기 콜백', desc: '하드웨어 타이머로 LED 깜빡이기', code:
+    id: 'timer', exclude: NO_ONBOARD_LED, title: 'Timer 주기 콜백', desc: '하드웨어 타이머로 LED 깜빡이기', code:
 `from machine import Pin, Timer
 
 led = Pin("LED", Pin.OUT)
@@ -188,7 +191,7 @@ tim.init(freq=2, mode=Timer.PERIODIC, callback=tick)
 print("타이머 시작 - 정지 버튼으로 멈추세요")
 ` },
   {
-    id: 'servo', title: '서보 모터 제어', desc: 'GP16 에 연결한 SG90 서보 각도 제어', code:
+    id: 'servo', exclude: NO_ONBOARD_LED, title: '서보 모터 제어', desc: 'GP16 에 연결한 SG90 서보 각도 제어', code:
 `from machine import Pin, PWM
 import time
 
@@ -247,7 +250,7 @@ while True:
     time.sleep_ms(30)
 ` },
   {
-    id: 'pio', title: 'PIO 로 LED 깜빡이기', desc: 'rp2 의 PIO 상태머신 사용 (GP25)', code:
+    id: 'pio', exclude: NO_ONBOARD_LED, title: 'PIO 로 LED 깜빡이기', desc: 'rp2 의 PIO 상태머신 사용 (GP25)', code:
 `import rp2
 from machine import Pin
 import time
@@ -271,7 +274,7 @@ sm.active(0)
 print("PIO 종료")
 ` },
   {
-    id: 'bootsel', title: 'BOOTSEL 버튼 읽기', desc: '보드의 BOOTSEL 버튼을 입력으로 사용', code:
+    id: 'bootsel', exclude: NO_ONBOARD_LED, title: 'BOOTSEL 버튼 읽기', desc: '보드의 BOOTSEL 버튼을 입력으로 사용', code:
 `import rp2
 import time
 from machine import Pin
@@ -286,7 +289,7 @@ while True:
     time.sleep_ms(100)
 ` },
   {
-    id: 'thread', title: '듀얼 코어 (_thread)', desc: '두 번째 코어에서 작업 실행', code:
+    id: 'thread', exclude: NO_ONBOARD_LED, title: '듀얼 코어 (_thread)', desc: '두 번째 코어에서 작업 실행', code:
 `import _thread
 import time
 from machine import Pin
@@ -328,6 +331,245 @@ if wlan.isconnected():
     print("연결됨:", wlan.ifconfig()[0])
 else:
     print("연결 실패, 상태:", wlan.status())
+` },
+];
+
+// Waveshare RP2040-Zero: 일반 LED 대신 GP16 에 WS2812 RGB LED 1개, BOOT 버튼, GP0~GP15 / GP26~GP29 핀
+const ZERO_LED_SETUP =
+`from machine import Pin
+from neopixel import NeoPixel
+
+# RP2040-Zero 의 내장 RGB LED (WS2812, GP16)
+led = NeoPixel(Pin(16), 1)
+# 빨강/초록이 바뀌어 보이면 아래 줄의 주석을 해제하세요 (보드 LED 가 RGB 순서인 경우)
+# led.ORDER = (0, 1, 2, 3)
+
+def rgb(r, g, b):
+    led[0] = (r, g, b)
+    led.write()
+`;
+
+const ZERO_TEMPLATES = [
+  {
+    id: 'zero_blink', title: '내장 RGB LED 깜빡이기', desc: 'GP16 의 WS2812 LED 를 켜고 끄기', code:
+`${ZERO_LED_SETUP}
+import time
+
+while True:
+    rgb(0, 40, 0)     # 초록 (밝기 0~255)
+    time.sleep(0.5)
+    rgb(0, 0, 0)      # 끄기
+    time.sleep(0.5)
+` },
+  {
+    id: 'zero_colors', title: 'RGB 색상 순환', desc: '빨강 → 초록 → 파랑 → 노랑 → 보라 → 청록 → 흰색', code:
+`${ZERO_LED_SETUP}
+import time
+
+COLORS = [
+    ("빨강", (50, 0, 0)),
+    ("초록", (0, 50, 0)),
+    ("파랑", (0, 0, 50)),
+    ("노랑", (50, 50, 0)),
+    ("보라", (50, 0, 50)),
+    ("청록", (0, 50, 50)),
+    ("흰색", (40, 40, 40)),
+]
+
+while True:
+    for name, c in COLORS:
+        print(name, c)
+        rgb(*c)
+        time.sleep(0.7)
+` },
+  {
+    id: 'zero_rainbow', title: 'RGB 무지개 (HSV)', desc: '색상환을 부드럽게 돌며 무지개 표시', code:
+`${ZERO_LED_SETUP}
+import time
+
+BRIGHT = 0.2   # 밝기 0.0 ~ 1.0
+
+def hsv(h, s=1.0, v=1.0):
+    # h: 0~360
+    h = (h % 360) / 60
+    i = int(h)
+    f = h - i
+    p, q, t = v * (1 - s), v * (1 - s * f), v * (1 - s * (1 - f))
+    r, g, b = [(v, t, p), (q, v, p), (p, v, t), (p, q, v), (t, p, v), (v, p, q)][i]
+    return int(r * 255), int(g * 255), int(b * 255)
+
+hue = 0
+while True:
+    r, g, b = hsv(hue, 1.0, BRIGHT)
+    rgb(r, g, b)
+    hue = (hue + 2) % 360
+    time.sleep_ms(20)
+` },
+  {
+    id: 'zero_breath', title: 'RGB 숨쉬기 효과', desc: '밝기가 서서히 변하는 호흡 LED', code:
+`${ZERO_LED_SETUP}
+import time
+import math
+
+COLOR = (0, 80, 255)   # 기본 색 (파랑 계열)
+
+t = 0
+while True:
+    level = (math.sin(t) + 1) / 2          # 0.0 ~ 1.0
+    level = level * level                  # 눈에 자연스럽게 보이도록 감마 보정
+    rgb(*[int(c * level) for c in COLOR])
+    t += 0.05
+    time.sleep_ms(15)
+` },
+  {
+    id: 'zero_bootbtn', title: 'BOOT 버튼으로 색 바꾸기', desc: 'rp2.bootsel_button() 을 누를 때마다 색 변경', code:
+`${ZERO_LED_SETUP}
+import rp2
+import time
+
+COLORS = [(40, 0, 0), (0, 40, 0), (0, 0, 40), (40, 40, 0), (0, 0, 0)]
+idx = 0
+rgb(*COLORS[idx])
+was = False
+
+while True:
+    now = rp2.bootsel_button() == 1
+    if now and not was:                    # 눌린 순간
+        idx = (idx + 1) % len(COLORS)
+        rgb(*COLORS[idx])
+        print("BOOT 버튼 → 색 번호", idx)
+    was = now
+    time.sleep_ms(30)
+` },
+  {
+    id: 'zero_temp', title: '온도에 따라 LED 색 변화', desc: '내장 온도 센서 → 파랑(차가움) ~ 빨강(뜨거움)', code:
+`${ZERO_LED_SETUP}
+from machine import ADC
+import time
+
+sensor = ADC(4)
+LOW, HIGH = 20, 40      # 이 범위를 색으로 표시 (°C)
+
+while True:
+    v = sensor.read_u16() * 3.3 / 65535
+    temp = 27 - (v - 0.706) / 0.001721
+    k = min(max((temp - LOW) / (HIGH - LOW), 0), 1)
+    rgb(int(60 * k), 0, int(60 * (1 - k)))
+    print("온도: {:.1f} °C".format(temp))
+    time.sleep(1)
+` },
+  {
+    id: 'zero_adc', title: '가변저항으로 LED 밝기', desc: 'GP26(ADC0) 가변저항 → RGB LED 밝기', code:
+`${ZERO_LED_SETUP}
+from machine import ADC
+import time
+
+pot = ADC(Pin(26))      # 가변저항 가운데 다리 → GP26, 양쪽 → 3V3 / GND
+
+while True:
+    raw = pot.read_u16()
+    level = raw * 255 // 65535
+    rgb(level, level, level)
+    print("ADC:", raw, "밝기:", level)
+    time.sleep_ms(100)
+` },
+  {
+    id: 'zero_button', title: '외부 버튼 + 인터럽트', desc: 'GP14 버튼을 누르면 LED 켜기/끄기', code:
+`${ZERO_LED_SETUP}
+import time
+
+button = Pin(14, Pin.IN, Pin.PULL_UP)   # 버튼 한쪽 GP14, 다른쪽 GND
+state = False
+last = 0
+
+def on_press(pin):
+    global state, last
+    now = time.ticks_ms()
+    if time.ticks_diff(now, last) > 200:  # 디바운스
+        state = not state
+        rgb(0, 50, 0) if state else rgb(0, 0, 0)
+        print("LED", "켜짐" if state else "꺼짐")
+    last = now
+
+button.irq(trigger=Pin.IRQ_FALLING, handler=on_press)
+
+while True:
+    time.sleep(1)
+` },
+  {
+    id: 'zero_extled', title: '외부 LED 깜빡이기 (GP0)', desc: 'GP0 에 LED + 220Ω 저항 연결', code:
+`from machine import Pin, Timer
+
+ext = Pin(0, Pin.OUT)
+tim = Timer()
+
+tim.init(freq=2, mode=Timer.PERIODIC, callback=lambda t: ext.toggle())
+print("GP0 LED 깜빡이는 중 - 정지 버튼으로 멈추세요")
+` },
+  {
+    id: 'zero_servo', title: '서보 모터 제어 (GP15)', desc: 'SG90 서보 신호선을 GP15 에 연결', code:
+`from machine import Pin, PWM
+import time
+
+servo = PWM(Pin(15))
+servo.freq(50)
+
+def angle(deg):
+    us = 500 + (deg / 180) * 2000       # 0.5ms ~ 2.5ms
+    servo.duty_ns(int(us * 1000))
+
+while True:
+    for a in (0, 90, 180, 90):
+        angle(a)
+        print("각도:", a)
+        time.sleep(1)
+` },
+  {
+    id: 'zero_uart', title: 'UART 통신 (GP0 TX / GP1 RX)', desc: '다른 장치와 시리얼로 주고받기', code:
+`from machine import UART, Pin
+import time
+
+uart = UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1))
+
+count = 0
+while True:
+    uart.write("hello {}\\n".format(count))
+    count += 1
+    if uart.any():
+        data = uart.read()
+        print("수신:", data)
+    time.sleep(1)
+` },
+  {
+    id: 'zero_pio_ws2812', title: 'PIO 로 WS2812 직접 구동', desc: 'neopixel 모듈 없이 PIO 상태머신으로 RGB LED 제어', code:
+`import rp2
+from machine import Pin
+import time
+
+@rp2.asm_pio(sideset_init=rp2.PIO.OUT_LOW, out_shiftdir=rp2.PIO.SHIFT_LEFT,
+             autopull=True, pull_thresh=24)
+def ws2812():
+    T1, T2, T3 = 2, 5, 3
+    wrap_target()
+    label("bitloop")
+    out(x, 1)               .side(0)    [T3 - 1]
+    jmp(not_x, "do_zero")   .side(1)    [T1 - 1]
+    jmp("bitloop")          .side(1)    [T2 - 1]
+    label("do_zero")
+    nop()                   .side(0)    [T2 - 1]
+    wrap()
+
+sm = rp2.StateMachine(0, ws2812, freq=8_000_000, sideset_base=Pin(16))
+sm.active(1)
+
+def show(r, g, b):
+    sm.put((g << 16 | r << 8 | b) << 8)   # WS2812 는 GRB 순서
+
+for c in [(40, 0, 0), (0, 40, 0), (0, 0, 40), (0, 0, 0)]:
+    show(*c)
+    print("색:", c)
+    time.sleep(1)
+sm.active(0)
 ` },
 ];
 
@@ -562,6 +804,7 @@ export const BOARDS = {
   'pico-w': { id: 'pico-w', family: 'pico', name: 'Raspberry Pi Pico W', short: 'Pico W', color: '#c51a4a', api: PICO_API, templates: PICO_TEMPLATES },
   pico2: { id: 'pico2', family: 'pico', name: 'Raspberry Pi Pico 2', short: 'Pico 2', color: '#c51a4a', api: PICO_API, templates: PICO_TEMPLATES },
   'pico2-w': { id: 'pico2-w', family: 'pico', name: 'Raspberry Pi Pico 2 W', short: 'Pico 2 W', color: '#c51a4a', api: PICO_API, templates: PICO_TEMPLATES },
+  'rp2040-zero': { id: 'rp2040-zero', family: 'pico', name: 'Waveshare RP2040-Zero', short: 'RP2040-Zero', color: '#2d8a4e', api: PICO_API, templates: [...ZERO_TEMPLATES, ...PICO_TEMPLATES] },
   microbit: { id: 'microbit', family: 'microbit', name: 'BBC micro:bit V1', short: 'micro:bit', color: '#00a0a0', api: MICROBIT_API, templates: MICROBIT_TEMPLATES },
   'microbit-v2': { id: 'microbit-v2', family: 'microbit', name: 'BBC micro:bit V2', short: 'micro:bit V2', color: '#00a0a0', api: MICROBIT_API, templates: MICROBIT_TEMPLATES },
   generic: { id: 'generic', family: 'generic', name: 'MicroPython 장치', short: 'MicroPython', color: '#3572a5', api: { modules: PICO_API.modules, members: PICO_API.members, classes: PICO_API.classes }, templates: GENERIC_TEMPLATES },
@@ -573,7 +816,7 @@ export function registerBoard(def) {
 
 export function templatesFor(boardId) {
   const b = BOARDS[boardId] || BOARDS.generic;
-  return b.templates.filter(t => !t.boards || t.boards.includes(boardId));
+  return b.templates.filter(t => (!t.boards || t.boards.includes(boardId)) && !t.exclude?.includes(boardId));
 }
 
 // USB VID 로 1차 추정
@@ -587,8 +830,12 @@ export function guessBoardFromUsb(vid) {
 export function boardFromInfo(platform, machine) {
   const m = (machine || '').toLowerCase();
   if (platform === 'rp2') {
+    // Waveshare 전용 펌웨어는 machine 에 "RP2040-Zero" 가 들어갑니다.
+    // 일반 Pico 펌웨어를 올린 경우는 "Raspberry Pi Pico" 로 보이므로 보드 배지를 눌러 직접 선택합니다.
+    if (/rp2040[-_ ]?zero|waveshare.*zero/.test(m)) return 'rp2040-zero';
     const two = m.includes('rp2350') || m.includes('pico 2');
-    const w = m.includes('pico w') || m.includes('pico 2 w') || m.includes('cyw43');
+    // "Pico with RP2040" 이 "pico w" 로 오인되지 않도록 단어 경계 사용
+    const w = /pico (2 )?w\b/.test(m) || m.includes('cyw43');
     return two ? (w ? 'pico2-w' : 'pico2') : (w ? 'pico-w' : 'pico');
   }
   if (platform === 'microbit' || m.includes('micro:bit')) {

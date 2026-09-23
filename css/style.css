@@ -55,7 +55,10 @@ button:disabled { opacity: .4; cursor: default; }
 .board-badge {
   font-size: 12px; padding: 3px 8px; border-radius: 99px; background: rgba(255,255,255,.12);
   white-space: nowrap; max-width: 40vw; overflow: hidden; text-overflow: ellipsis;
+  border: 0; color: inherit; cursor: pointer;
 }
+.board-badge::after { content: " ▾"; opacity: .7; }
+.menu-list button.active { color: var(--accent); font-weight: 600; }
 .board-badge.on { background: var(--board-color, #1f9d55); color: #fff; }
 
 .btn {

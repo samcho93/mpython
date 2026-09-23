@@ -6,7 +6,7 @@ import { BOARDS, registerBoard, templatesFor } from './boards.js';
 import { Files, Settings } from './storage.js';
 import plugins from './plugins/index.js';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 
 const $ = (id) => document.getElementById(id);
 const isNarrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -234,10 +234,49 @@ function setConnectedUI(on) {
     badge.style.setProperty('--board-color', bd.color);
     badge.classList.add('on');
   } else {
-    badge.textContent = '연결 안 됨';
-    badge.title = '';
+    const bd = BOARDS[state.settings.lastBoard] || BOARDS.generic;
+    badge.textContent = bd.short;
+    badge.title = '연결 안 됨 · 눌러서 보드 선택';
     badge.classList.remove('on');
   }
+}
+
+// 보드 수동 선택 (같은 펌웨어를 쓰는 보드 구분, 예: 일반 Pico 펌웨어를 올린 RP2040-Zero)
+function openBoardDialog() {
+  const dev = state.device;
+  const cur = dev?.board || state.settings.lastBoard;
+  const family = dev ? (BOARDS[dev.board] || BOARDS.generic).family : null;
+  $('boardHint').textContent = dev
+    ? `인식된 장치: ${dev.machine || dev.platform || '알 수 없음'}. 실제 보드와 다르면 선택하세요. (이 장치에 대해 기억됩니다)`
+    : '예제와 자동완성에 사용할 보드를 선택하세요. 장치를 연결하면 자동으로 인식됩니다.';
+  const list = $('boardList');
+  list.replaceChildren();
+  for (const b of Object.values(BOARDS)) {
+    if (family && b.family !== family && b.id !== 'generic') continue;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = (b.id === cur ? '✓ ' : '') + b.name;
+    btn.classList.toggle('active', b.id === cur);
+    btn.onclick = () => { $('dlgBoard').close(); selectBoard(b.id); };
+    list.appendChild(btn);
+  }
+  $('dlgBoard').showModal();
+}
+
+function selectBoard(id) {
+  const dev = state.device;
+  if (dev) {
+    dev.board = id;
+    const overrides = { ...state.settings.boardOverrides, [dev.machine || dev.platform]: id };
+    state.settings = Settings.set({ boardOverrides: overrides });
+    termOut(`\r\n[보드 변경: ${BOARDS[id].name}]\r\n`, 'info');
+  }
+  state.settings = Settings.set({ lastBoard: id });
+  state.fileBoard = id;
+  if (state.fileName) Files.put(state.fileName, editor.value, id);
+  setConnectedUI(!!dev);
+  refreshLocalFiles();
+  toast(`${BOARDS[id].name} 선택됨`);
 }
 
 async function connect() {
@@ -265,9 +304,15 @@ async function connect() {
   setConnectedUI(true);
   try {
     const info = await dev.identify();
-    const bd = BOARDS[info.board];
-    termOut(`[보드 인식: ${bd.name}${info.machine ? ' · ' + info.machine : ''}]\r\n>>> `, 'info');
-    state.settings = Settings.set({ lastBoard: info.board });
+    const saved = state.settings.boardOverrides?.[info.machine || info.platform];
+    if (saved && BOARDS[saved] && BOARDS[saved].family === BOARDS[info.board].family) dev.board = saved;
+    const bd = BOARDS[dev.board];
+    termOut(`[보드 인식: ${bd.name}${info.machine ? ' · ' + info.machine : ''}]\r\n`, 'info');
+    if (bd.family === 'pico' && !saved && dev.board !== 'rp2040-zero') {
+      termOut('[RP2040-Zero 등 다른 RP2040 보드라면 상단의 보드 이름을 눌러 변경하세요]\r\n', 'info');
+    }
+    termOut('>>> ');
+    state.settings = Settings.set({ lastBoard: dev.board });
     toast(`${bd.name} 연결됨`);
   } catch (e) {
     termOut(`[보드 정보를 읽지 못했습니다: ${e.message}]\r\n`, 'err');
@@ -418,6 +463,7 @@ function renderNewDialog() {
 
 function blankCode(bd) {
   if (bd.family === 'microbit') return 'from microbit import *\n\n\nwhile True:\n    \n    sleep(100)\n';
+  if (bd.id === 'rp2040-zero') return 'from machine import Pin\nfrom neopixel import NeoPixel\nimport time\n\nled = NeoPixel(Pin(16), 1)   # 내장 RGB LED\n\n\n';
   if (bd.family === 'pico') return 'from machine import Pin\nimport time\n\n\n';
   return 'import machine\nimport time\n\n\n';
 }
@@ -435,6 +481,7 @@ $('btnClear').onclick = () => term.clear();
 $('btnCtrlC').onclick = () => state.device?.write('\x03');
 $('btnCtrlD').onclick = () => state.device?.softReset();
 $('fileTitle').onclick = renameCurrent;
+$('boardBadge').onclick = openBoardDialog;
 
 document.querySelectorAll('#bottomnav button').forEach(b => { b.onclick = () => setView(b.dataset.view); });
 

@@ -16,7 +16,7 @@
     <div class="file-title" id="fileTitle" title="파일 이름 변경">
       <span id="fileName">main.py</span><span id="dirtyMark" class="dirty" hidden>●</span>
     </div>
-    <span class="board-badge" id="boardBadge">연결 안 됨</span>
+    <button type="button" class="board-badge" id="boardBadge" title="보드 선택">연결 안 됨</button>
     <button class="btn connect" id="btnConnect">연결</button>
   </header>
 
@@ -107,6 +107,15 @@
       <div class="board-tabs" id="boardTabs"></div>
       <p class="hint" id="newHint"></p>
       <ul class="template-list" id="templateList"></ul>
+    </form>
+  </dialog>
+
+  <!-- 보드 선택 -->
+  <dialog id="dlgBoard" class="sheet">
+    <form method="dialog" class="sheet-body">
+      <header><h2>보드 선택</h2><button class="icon-btn" value="cancel">✕</button></header>
+      <p class="hint" id="boardHint"></p>
+      <div class="menu-list" id="boardList"></div>
     </form>
   </dialog>
 
