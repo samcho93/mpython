@@ -113,7 +113,7 @@ export class UsbCdcTransport {
     try {
       if (!dev.opened) await dev.open();
     } catch (e) {
-      throw new Error(`USB 장치를 열 수 없습니다 (${e.name}). 다른 앱이 사용 중이면 종료하고, Android 의 USB 접근 허용 창에서 '허용'을 누르세요.`);
+      throw new Error(`USB 장치를 열 수 없습니다 (${e.name}: ${e.message}). 다른 앱이 사용 중이면 종료하고, Android 의 USB 접근 허용 창에서 '허용'을 누르세요.`);
     }
     log('USB 열기 성공');
     if (!dev.configuration) await dev.selectConfiguration(1);
@@ -135,9 +135,19 @@ export class UsbCdcTransport {
 
     try {
       await dev.claimInterface(data.num);
-    } catch (e) {
-      throw new Error(`USB 인터페이스를 점유할 수 없습니다 (${e.name}). 다른 앱(시리얼 터미널 등)이 사용 중이면 종료하세요. PC 에서는 설정에서 연결 방식을 Web Serial 로 바꾸세요.`);
+    } catch (e1) {
+      // 이전 연결이 남아 있는 경우가 있어 장치를 다시 열고 한 번 더 시도
+      log(`데이터 인터페이스 점유 실패 (${e1.name}: ${e1.message}) → 다시 시도`);
+      try {
+        await dev.close();
+        await dev.open();
+        if (!dev.configuration) await dev.selectConfiguration(1);
+        await dev.claimInterface(data.num);
+      } catch (e) {
+        throw new Error(`USB 인터페이스를 점유할 수 없습니다 (${e.name}: ${e.message}). 다른 앱(시리얼 터미널 등)이 사용 중이면 종료하세요.`);
+      }
     }
+    log('데이터 인터페이스 점유 성공');
     if (ctrl !== null) {
       try { await dev.claimInterface(ctrl); } catch (e) { log(`제어 인터페이스 점유 실패: ${e.name}`); ctrl = null; }
     }

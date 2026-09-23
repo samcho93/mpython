@@ -1,5 +1,5 @@
 // ?¤í”„?¼ì¸ ?¬ìš©???„í•œ ?œë¹„???Œì»¤ (?¤íŠ¸?Œí¬ ?°ì„ , ?¤íŒ¨ ??ìºì‹œ)
-const CACHE = 'mpython-v1.2.0';
+const CACHE = 'mpython-v1.2.1';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'vendor/codemirror.js', 'js/app.js', 'js/editor.js', 'js/terminal.js', 'js/transport.js',

@@ -6,7 +6,7 @@ import { BOARDS, registerBoard, templatesFor } from './boards.js';
 import { Files, Settings } from './storage.js';
 import plugins from './plugins/index.js';
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.2.1';
 
 const $ = (id) => document.getElementById(id);
 const isNarrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -291,7 +291,7 @@ async function connect(device = null) {
 async function doConnect(device) {
   const t = device
     ? ('productId' in device && 'transferIn' in device ? new UsbCdcTransport() : new SerialTransport())
-    : createTransport(state.settings.transport);
+    : createTransport(state.fallback || state.settings.transport);
   if (!t) {
     toast('이 브라우저는 USB 시리얼을 지원하지 않습니다. Android Chrome 또는 PC Chrome/Edge 를 사용하세요.', 'error');
     return;
@@ -314,9 +314,24 @@ async function doConnect(device) {
       toast('장치가 선택되지 않았습니다 · 터미널 안내를 확인하세요');
       return;
     }
-    toast('연결 실패: ' + e.message, 'error');
     termOut(`[연결 실패] ${e.message}\r\n`, 'err');
+    // 자동 모드에서는 다음 시도에 다른 연결 방식(WebUSB ↔ Web Serial)을 사용
+    const other = t instanceof UsbCdcTransport ? 'serial' : 'usb';
+    const otherOk = other === 'serial' ? SerialTransport.supported : UsbCdcTransport.supported;
+    if (!device && state.settings.transport === 'auto' && otherOk) {
+      state.fallback = other;
+      termOut(`  → 다른 연결 방식(${other === 'serial' ? 'Web Serial' : 'WebUSB'})으로 바꿨습니다. [연결] 을 한 번 더 눌러 주세요.\r\n`, 'info');
+      toast('연결 실패 · [연결] 을 한 번 더 누르면 다른 방식으로 시도합니다', 'error');
+    } else {
+      toast('연결 실패: ' + e.message, 'error');
+    }
     return;
+  }
+  if (!device && state.fallback) {
+    // 대체 방식이 성공하면 이후에도 그 방식을 사용
+    state.settings = Settings.set({ transport: state.fallback });
+    termOut(`  · 이후 연결은 ${state.fallback === 'serial' ? 'Web Serial' : 'WebUSB'} 방식을 사용합니다 (설정에서 변경 가능)\r\n`, 'info');
+    state.fallback = null;
   }
   const dev = new Device(t, {
     onOutput: (s) => termOut(s),
