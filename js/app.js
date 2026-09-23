@@ -6,7 +6,7 @@ import { BOARDS, registerBoard, templatesFor } from './boards.js';
 import { Files, Settings } from './storage.js';
 import plugins from './plugins/index.js';
 
-export const VERSION = '1.2.1';
+export const VERSION = '1.2.2';
 
 const $ = (id) => document.getElementById(id);
 const isNarrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -318,7 +318,9 @@ async function doConnect(device) {
     // 자동 모드에서는 다음 시도에 다른 연결 방식(WebUSB ↔ Web Serial)을 사용
     const other = t instanceof UsbCdcTransport ? 'serial' : 'usb';
     const otherOk = other === 'serial' ? SerialTransport.supported : UsbCdcTransport.supported;
-    if (!device && state.settings.transport === 'auto' && otherOk) {
+    // Android 의 Web Serial 은 블루투스 전용이라 USB 에는 쓸 수 없으므로 전환하지 않음
+    const android = /Android/i.test(navigator.userAgent);
+    if (!device && state.settings.transport === 'auto' && otherOk && !android) {
       state.fallback = other;
       termOut(`  → 다른 연결 방식(${other === 'serial' ? 'Web Serial' : 'WebUSB'})으로 바꿨습니다. [연결] 을 한 번 더 눌러 주세요.\r\n`, 'info');
       toast('연결 실패 · [연결] 을 한 번 더 누르면 다른 방식으로 시도합니다', 'error');

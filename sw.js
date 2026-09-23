@@ -1,5 +1,5 @@
 // ?¤í”„?¼ì¸ ?¬ìš©???„í•œ ?œë¹„???Œì»¤ (?¤íŠ¸?Œí¬ ?°ì„ , ?¤íŒ¨ ??ìºì‹œ)
-const CACHE = 'mpython-v1.2.1';
+const CACHE = 'mpython-v1.2.2';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'vendor/codemirror.js', 'js/app.js', 'js/editor.js', 'js/terminal.js', 'js/transport.js',
@@ -18,7 +18,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request).then(res => {
+    fetch(e.request, { cache: 'no-cache' }).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
       return res;

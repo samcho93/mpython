@@ -133,8 +133,19 @@ export class UsbCdcTransport {
     log(`인터페이스: ${summary.join(' ')}`);
     if (!data) throw new Error('이 장치에서 USB 시리얼(CDC) 인터페이스를 찾지 못했습니다. MicroPython 펌웨어가 설치되어 있는지 확인하세요.');
 
-    try {
+    // 반드시 제어 인터페이스(0x02)를 먼저 점유해야 합니다.
+    // Android 커널의 cdc_acm 드라이버가 두 인터페이스를 모두 잡고 있는데, Chrome 은 제어 인터페이스를
+    // 점유할 때만 cdc_acm 을 떼어냅니다(허용 목록). 그러면 데이터 인터페이스도 함께 풀립니다.
+    const claimAll = async () => {
+      if (ctrl !== null) {
+        try { await dev.claimInterface(ctrl); log(`제어 인터페이스 #${ctrl} 점유 성공`); }
+        catch (e) { log(`제어 인터페이스 #${ctrl} 점유 실패: ${e.name}`); }
+      }
       await dev.claimInterface(data.num);
+      log(`데이터 인터페이스 #${data.num} 점유 성공`);
+    };
+    try {
+      await claimAll();
     } catch (e1) {
       // 이전 연결이 남아 있는 경우가 있어 장치를 다시 열고 한 번 더 시도
       log(`데이터 인터페이스 점유 실패 (${e1.name}: ${e1.message}) → 다시 시도`);
@@ -142,14 +153,10 @@ export class UsbCdcTransport {
         await dev.close();
         await dev.open();
         if (!dev.configuration) await dev.selectConfiguration(1);
-        await dev.claimInterface(data.num);
+        await claimAll();
       } catch (e) {
         throw new Error(`USB 인터페이스를 점유할 수 없습니다 (${e.name}: ${e.message}). 다른 앱(시리얼 터미널 등)이 사용 중이면 종료하세요.`);
       }
-    }
-    log('데이터 인터페이스 점유 성공');
-    if (ctrl !== null) {
-      try { await dev.claimInterface(ctrl); } catch (e) { log(`제어 인터페이스 점유 실패: ${e.name}`); ctrl = null; }
     }
     this.data = data;
 
