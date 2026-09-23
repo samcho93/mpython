@@ -1,5 +1,5 @@
-// 오프라인 사용을 위한 서비스 워커 (네트워크 우선, 실패 시 캐시)
-const CACHE = 'mpython-v1.1.0';
+// ?�프?�인 ?�용???�한 ?�비???�커 (?�트?�크 ?�선, ?�패 ??캐시)
+const CACHE = 'mpython-v1.2.0';
 const ASSETS = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'vendor/codemirror.js', 'js/app.js', 'js/editor.js', 'js/terminal.js', 'js/transport.js',

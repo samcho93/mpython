@@ -1,12 +1,12 @@
-import { CodeEditor, addCompletionSource } from './editor.js';
+﻿import { CodeEditor, addCompletionSource } from './editor.js';
 import { Terminal } from './terminal.js';
-import { createTransport, SerialTransport, UsbCdcTransport } from './transport.js';
+import { createTransport, SerialTransport, UsbCdcTransport, USB_FILTERS } from './transport.js';
 import { Device } from './repl.js';
 import { BOARDS, registerBoard, templatesFor } from './boards.js';
 import { Files, Settings } from './storage.js';
 import plugins from './plugins/index.js';
 
-export const VERSION = '1.1.0';
+export const VERSION = '1.2.0';
 
 const $ = (id) => document.getElementById(id);
 const isNarrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -279,19 +279,43 @@ function selectBoard(id) {
   toast(`${BOARDS[id].name} 선택됨`);
 }
 
-async function connect() {
+// device: 이전에 허용한 USBDevice / SerialPort 를 주면 선택 창 없이 연결
+let connecting = false;
+async function connect(device = null) {
   if (state.device) return disconnect();
-  const t = createTransport(state.settings.transport);
+  if (connecting) return;
+  connecting = true;
+  try { await doConnect(device); } finally { connecting = false; }
+}
+
+async function doConnect(device) {
+  const t = device
+    ? ('productId' in device && 'transferIn' in device ? new UsbCdcTransport() : new SerialTransport())
+    : createTransport(state.settings.transport);
   if (!t) {
     toast('이 브라우저는 USB 시리얼을 지원하지 않습니다. Android Chrome 또는 PC Chrome/Edge 를 사용하세요.', 'error');
     return;
   }
+  // 연결 과정을 볼 수 있도록 모바일에서는 터미널 화면으로 이동
+  if (window.innerWidth < 600) setView('terminal');
+  t.log = (msg) => termOut(`  · ${msg}\r\n`, 'info');
+  termOut(`\r\n[연결 시도 - ${t instanceof UsbCdcTransport ? 'WebUSB' : 'Web Serial'}]\r\n`, 'info');
   try {
-    await t.open({ anyDevice: state.settings.anyDevice });
+    await t.open({ anyDevice: state.settings.anyDevice, device });
   } catch (e) {
-    if (e.name === 'NotFoundError' || /No device selected|cancel/i.test(e.message)) return;
+    try { await t.close(); } catch (_) {}
+    if (e.name === 'NotFoundError' || /No device selected|cancel/i.test(e.message)) {
+      termOut('[장치를 선택하지 않았습니다]\r\n' +
+        '  목록에 장치가 없었다면 폰이 보드를 인식하지 못한 것입니다:\r\n' +
+        '  - 데이터 전송이 되는 케이블인지 (충전 전용 케이블 X)\r\n' +
+        '  - OTG 케이블/젠더 사용, 폰 설정의 "OTG 연결" 켜짐 여부\r\n' +
+        '  - 보드에 MicroPython 펌웨어가 설치되어 있는지\r\n' +
+        '  - 목록에 없으면 설정 > "모든 USB 장치 표시" 를 켜고 다시 시도\r\n', 'err');
+      toast('장치가 선택되지 않았습니다 · 터미널 안내를 확인하세요');
+      return;
+    }
     toast('연결 실패: ' + e.message, 'error');
-    termOut(`\r\n[연결 실패] ${e.message}\r\n`, 'err');
+    termOut(`[연결 실패] ${e.message}\r\n`, 'err');
     return;
   }
   const dev = new Device(t, {
@@ -316,7 +340,13 @@ async function connect() {
     toast(`${bd.name} 연결됨`);
   } catch (e) {
     termOut(`[보드 정보를 읽지 못했습니다: ${e.message}]\r\n`, 'err');
-    toast('MicroPython 응답이 없습니다. 펌웨어를 확인하세요.', 'error');
+    if (!dev.lastRx) {
+      termOut('  장치로부터 데이터를 전혀 받지 못했습니다.\r\n' +
+        '  - 보드를 뽑았다 다시 꽂은 뒤 [연결] 을 다시 눌러 보세요\r\n' +
+        '  - 설정 > 연결 방식을 다른 방식(WebUSB ↔ Web Serial)으로 바꿔 보세요\r\n' +
+        '  - PC 의 Thonny 에서 >>> 가 나오는지 확인하세요 (펌웨어 확인)\r\n', 'err');
+    }
+    toast('MicroPython 응답이 없습니다. 터미널 안내를 확인하세요.', 'error');
   }
   setConnectedUI(true);
   emit('connect', dev);
@@ -469,7 +499,7 @@ function blankCode(bd) {
 }
 
 // ---------------- 이벤트 연결 ----------------
-$('btnConnect').onclick = connect;
+$('btnConnect').onclick = () => connect();
 $('btnRun').onclick = runCode;
 $('btnStop').onclick = stopCode;
 $('btnUpload').onclick = () => uploadToDevice(true);
@@ -521,6 +551,7 @@ $('mExport').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 };
 $('mDeviceSave').onclick = () => { $('dlgMenu').close(); uploadToDevice(false); };
+$('mDiag').onclick = () => { $('dlgMenu').close(); diagnose(); };
 $('mSettings').onclick = () => { $('dlgMenu').close(); openSettings(); };
 $('mHelp').onclick = () => { $('dlgMenu').close(); $('dlgHelp').showModal(); };
 
@@ -650,10 +681,76 @@ const api = {
     return b;
   },
   newFile(name, content, board) { createFile(uniqueName(name), content, board ?? currentBoard()); },
-  run: runCode, stop: stopCode, upload: uploadToDevice, connect,
+  run: runCode, stop: stopCode, upload: uploadToDevice, connect: () => connect(),
   exec: async (code) => { await ensureIdle(); return state.device.exec(code); },
 };
 window.MPY = api;
+
+// ---------------- 연결 진단 ----------------
+async function diagnose() {
+  setView('terminal');
+  const L = (m, cls = 'info') => termOut(m + '\r\n', cls);
+  const ua = navigator.userAgent;
+  L('\r\n[USB 연결 진단]');
+  L('  브라우저: ' + (ua.match(/(SamsungBrowser|Whale|NAVER|KAKAOTALK|Edg|Chrome|Firefox|Safari)\/[\d.]+/i)?.[0] || ua));
+  L('  보안 연결(HTTPS): ' + (window.isSecureContext ? '예' : '아니오 → USB 사용 불가'), window.isSecureContext ? 'info' : 'err');
+  L('  WebUSB: ' + (UsbCdcTransport.supported ? '지원' : '미지원'), UsbCdcTransport.supported ? 'info' : 'err');
+  L('  Web Serial: ' + (SerialTransport.supported ? '지원' : '미지원'));
+  if (/KAKAOTALK|NAVER|Line\/|Instagram|FBAN|SamsungBrowser|Whale/i.test(ua)) {
+    L('  → 이 브라우저(앱 내부 브라우저 포함)는 USB 를 지원하지 않을 수 있습니다. Chrome 으로 여세요.', 'err');
+  }
+  if (/iPhone|iPad/i.test(ua)) L('  → iPhone/iPad 은 USB 연결을 지원하지 않습니다.', 'err');
+  const t = createTransport(state.settings.transport);
+  L('  사용할 연결 방식: ' + (t ? (t instanceof UsbCdcTransport ? 'WebUSB' : 'Web Serial') : '없음'));
+  const id = (v, p) => (v ?? 0).toString(16).padStart(4, '0') + ':' + (p ?? 0).toString(16).padStart(4, '0');
+  try {
+    if (UsbCdcTransport.supported) {
+      const ds = await navigator.usb.getDevices();
+      L('  허용된 USB 장치: ' + (ds.length ? ds.map(d => `${d.productName || '?'} (${id(d.vendorId, d.productId)})`).join(', ') : '없음'));
+    }
+    if (SerialTransport.supported) {
+      const ps = await navigator.serial.getPorts();
+      L('  허용된 시리얼 포트: ' + (ps.length ? ps.map(p => { const i = p.getInfo(); return id(i.usbVendorId, i.usbProductId); }).join(', ') : '없음'));
+    }
+  } catch (e) { L('  장치 목록 오류: ' + e.message, 'err'); }
+  L('  연결 상태: ' + (state.device ? '연결됨 (' + (BOARDS[state.device.board]?.name || '') + ')' : '연결 안 됨'));
+  L('  (Pico 정상: 2e8a:0005 / BOOTSEL 모드: 2e8a:0003 / micro:bit: 0d28:0204)');
+}
+
+// ---------------- 자동 연결 ----------------
+// 한 번 허용한 장치는 꽂기만 하면(또는 앱을 열면) 선택 창 없이 자동으로 연결합니다.
+function isKnownUsb(vid, pid) {
+  return USB_FILTERS.some(f => f.vid === vid) && !(vid === 0x2E8A && pid === 0x0003); // BOOTSEL 모드 제외
+}
+
+function setupAutoConnect() {
+  const tryAuto = (device, label) => {
+    if (state.device || connecting) return;
+    toast(label + ' · 자동 연결합니다');
+    connect(device);
+  };
+  if (UsbCdcTransport.supported) {
+    navigator.usb.addEventListener('connect', (e) => {
+      if (isKnownUsb(e.device.vendorId, e.device.productId)) tryAuto(e.device, 'USB 장치 감지');
+    });
+  }
+  if (SerialTransport.supported) {
+    navigator.serial.addEventListener('connect', (e) => {
+      const i = e.target.getInfo();
+      if (isKnownUsb(i.usbVendorId, i.usbProductId)) tryAuto(e.target, '시리얼 장치 감지');
+    });
+  }
+  // 앱 시작 시 이미 꽂혀 있는 허용된 장치
+  setTimeout(async () => {
+    try {
+      const preferUsb = createTransport(state.settings.transport) instanceof UsbCdcTransport;
+      const list = preferUsb
+        ? (await navigator.usb.getDevices()).filter(d => isKnownUsb(d.vendorId, d.productId))
+        : (await navigator.serial.getPorts()).filter(p => { const i = p.getInfo(); return isKnownUsb(i.usbVendorId, i.usbProductId); });
+      if (list.length === 1) tryAuto(list[0], '허용된 장치 발견');
+    } catch (_) {}
+  }, 500);
+}
 
 // ---------------- 시작 ----------------
 function start() {
@@ -683,6 +780,8 @@ function start() {
   if (!SerialTransport.supported && !UsbCdcTransport.supported) {
     termOut('\r\n[알림] 이 브라우저는 USB 연결을 지원하지 않습니다. 편집만 가능합니다.\r\n(Android Chrome 또는 PC Chrome/Edge 권장)\r\n', 'err');
   }
+
+  setupAutoConnect();
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
