@@ -238,7 +238,12 @@ export class UsbCdcTransport {
 }
 
 // 환경에 맞는 전송 방식을 선택. pref: 'auto' | 'serial' | 'usb'
+export const IS_ANDROID = /Android/i.test(navigator.userAgent);
+
 export function createTransport(pref = 'auto') {
+  // Android Chrome 의 Web Serial 은 블루투스 전용이라 USB 보드가 목록에 나오지 않습니다.
+  // 따라서 Android 에서는 설정과 관계없이 항상 WebUSB 를 사용합니다.
+  if (IS_ANDROID && UsbCdcTransport.supported) return new UsbCdcTransport();
   if (pref === 'serial' && SerialTransport.supported) return new SerialTransport();
   if (pref === 'usb' && UsbCdcTransport.supported) return new UsbCdcTransport();
   // Android 에서는 WebUSB 로 CDC 를 직접 구동하는 방식이 가장 안정적입니다

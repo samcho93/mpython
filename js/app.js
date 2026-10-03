@@ -1,12 +1,12 @@
 ﻿import { CodeEditor, addCompletionSource } from './editor.js';
 import { Terminal } from './terminal.js';
-import { createTransport, SerialTransport, UsbCdcTransport, USB_FILTERS } from './transport.js';
+import { createTransport, SerialTransport, UsbCdcTransport, USB_FILTERS, IS_ANDROID } from './transport.js';
 import { Device } from './repl.js';
 import { BOARDS, registerBoard, templatesFor } from './boards.js';
 import { Files, Settings } from './storage.js';
 import plugins from './plugins/index.js';
 
-export const VERSION = '1.2.2';
+export const VERSION = '1.2.3';
 
 const $ = (id) => document.getElementById(id);
 const isNarrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -306,7 +306,9 @@ async function doConnect(device) {
     try { await t.close(); } catch (_) {}
     if (e.name === 'NotFoundError' || /No device selected|cancel/i.test(e.message)) {
       termOut('[장치를 선택하지 않았습니다]\r\n' +
+        '  선택 창에 "Board in FS mode" 가 보이면 그것을 눌러 선택하세요.\r\n' +
         '  목록에 장치가 없었다면 폰이 보드를 인식하지 못한 것입니다:\r\n' +
+        '  - Pico 를 뽑았다가 다시 꽂기 (젠더/케이블 접촉 확인)\r\n' +
         '  - 데이터 전송이 되는 케이블인지 (충전 전용 케이블 X)\r\n' +
         '  - OTG 케이블/젠더 사용, 폰 설정의 "OTG 연결" 켜짐 여부\r\n' +
         '  - 보드에 MicroPython 펌웨어가 설치되어 있는지\r\n' +
@@ -599,7 +601,8 @@ function openSettings() {
   $('setWrap').checked = s.wrap;
   $('setAutoTerm').checked = s.autoTerm;
   $('setTarget').value = s.target;
-  $('setTransport').querySelector('[value="serial"]').disabled = !SerialTransport.supported;
+  // Android 의 Web Serial 은 블루투스 전용이라 USB 보드에는 쓸 수 없음
+  $('setTransport').querySelector('[value="serial"]').disabled = !SerialTransport.supported || IS_ANDROID;
   $('setTransport').querySelector('[value="usb"]').disabled = !UsbCdcTransport.supported;
   $('dlgSettings').showModal();
 }
@@ -744,7 +747,8 @@ function setupAutoConnect() {
   const tryAuto = (device, label) => {
     if (state.device || connecting) return;
     toast(label + ' · 자동 연결합니다');
-    connect(device);
+    // 꽂은 직후에는 보드가 아직 준비 중일 수 있어 잠시 기다린 뒤 연결
+    setTimeout(() => { if (!state.device && !connecting) connect(device); }, 1500);
   };
   if (UsbCdcTransport.supported) {
     navigator.usb.addEventListener('connect', (e) => {
@@ -772,6 +776,8 @@ function setupAutoConnect() {
 // ---------------- 시작 ----------------
 function start() {
   $('appVersion').textContent = 'v' + VERSION;
+  // 예전 버전에서 Android 에 Web Serial 이 저장되어 있으면 자동으로 되돌림
+  if (IS_ANDROID && state.settings.transport === 'serial') state.settings = Settings.set({ transport: 'auto' });
   editor.setFontSize(state.settings.fontSize);
   editor.setLint(state.settings.lint);
   editor.setWrap(state.settings.wrap);
