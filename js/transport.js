@@ -15,6 +15,22 @@ export const USB_FILTERS = [
 ];
 
 const BAUD = 115200;
+/**
+ * 브라우저의 장치 선택 창을 띄움. 실패한 오류에 표시를 붙여 원인을 구분할 수 있게 함:
+ *  err.fromChooser = true  : 선택 창 단계에서 난 오류 (다른 단계의 NotFoundError 와 구분)
+ *  err.quick = true        : 거의 즉시 거부됨 → 선택 창이 아예 뜨지 않은 경우 (사이트 USB 권한 차단 등)
+ */
+async function openChooser(fn) {
+  const t0 = performance.now();
+  try {
+    return await fn();
+  } catch (e) {
+    e.fromChooser = true;
+    e.quick = performance.now() - t0 < 600;
+    throw e;
+  }
+}
+
 const hex = (n) => '0x' + (n ?? 0).toString(16).toUpperCase().padStart(4, '0');
 
 export class SerialTransport {
@@ -29,7 +45,8 @@ export class SerialTransport {
   async open({ anyDevice = false, device = null } = {}) {
     const log = this.log || (() => {});
     const filters = anyDevice ? [] : USB_FILTERS.map(f => ({ usbVendorId: f.vid }));
-    this.port = device || await navigator.serial.requestPort({ filters });
+    if (!device) log('포트 선택 창 여는 중…');
+    this.port = device || await openChooser(() => navigator.serial.requestPort({ filters }));
     const pi = this.port.getInfo();
     log(`포트 선택됨 (VID ${hex(pi.usbVendorId)} PID ${hex(pi.usbProductId)})`);
     try {
@@ -103,7 +120,8 @@ export class UsbCdcTransport {
     let dev = device;
     if (!dev) {
       const filters = anyDevice ? [] : USB_FILTERS.map(f => ({ vendorId: f.vid }));
-      dev = await navigator.usb.requestDevice({ filters });
+      log('장치 선택 창 여는 중…');
+      dev = await openChooser(() => navigator.usb.requestDevice({ filters }));
     }
     this.dev = dev;
     log(`장치 선택됨: ${dev.productName || '?'} (VID ${hex(dev.vendorId)} PID ${hex(dev.productId)})`);

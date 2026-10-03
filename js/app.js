@@ -6,7 +6,7 @@ import { BOARDS, registerBoard, templatesFor } from './boards.js';
 import { Files, Settings } from './storage.js';
 import plugins from './plugins/index.js';
 
-export const VERSION = '1.2.3';
+export const VERSION = '1.2.4';
 
 const $ = (id) => document.getElementById(id);
 const isNarrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -299,12 +299,24 @@ async function doConnect(device) {
   // 연결 과정을 볼 수 있도록 모바일에서는 터미널 화면으로 이동
   if (window.innerWidth < 600) setView('terminal');
   t.log = (msg) => termOut(`  · ${msg}\r\n`, 'info');
-  termOut(`\r\n[연결 시도 - ${t instanceof UsbCdcTransport ? 'WebUSB' : 'Web Serial'}]\r\n`, 'info');
+  termOut(`\r\n[연결 시도 - ${t instanceof UsbCdcTransport ? 'WebUSB' : 'Web Serial'} · v${VERSION}]\r\n`, 'info');
   try {
     await t.open({ anyDevice: state.settings.anyDevice, device });
   } catch (e) {
     try { await t.close(); } catch (_) {}
-    if (e.name === 'NotFoundError' || /No device selected|cancel/i.test(e.message)) {
+    if (e.fromChooser && e.quick && e.name === 'NotFoundError') {
+      // 선택 창이 뜨지도 않고 바로 거부됨 → 브라우저가 이 사이트의 USB 접근을 막고 있음
+      termOut(`[선택 창이 열리지 않았습니다] (${e.name}: ${e.message})\r\n` +
+        '  Chrome 이 이 사이트의 USB 접근을 차단하고 있을 가능성이 큽니다.\r\n' +
+        '  1) 주소창 왼쪽 아이콘(⚙/🔒) → 권한(사이트 설정) → "USB 기기" 를 허용 또는 "권한 초기화"\r\n' +
+        '  2) Chrome ⋮ → 설정 → 사이트 설정 → USB 기기 →\r\n' +
+        '     "사이트에서 USB 기기에 연결하도록 요청할 수 있음" 켜기, 차단 목록에서 이 사이트 삭제\r\n' +
+        '  3) 시크릿 탭, 카카오톡 등 앱 안의 브라우저가 아닌 일반 Chrome 탭에서 열기\r\n' +
+        '  설정 후 페이지를 새로고침하고 [연결] 을 다시 누르세요.\r\n', 'err');
+      toast('선택 창이 열리지 않았습니다 · Chrome 의 USB 권한을 확인하세요', 'error');
+      return;
+    }
+    if (e.fromChooser && (e.name === 'NotFoundError' || /No device selected|cancel/i.test(e.message))) {
       termOut('[장치를 선택하지 않았습니다]\r\n' +
         '  선택 창에 "Board in FS mode" 가 보이면 그것을 눌러 선택하세요.\r\n' +
         '  목록에 장치가 없었다면 폰이 보드를 인식하지 못한 것입니다:\r\n' +
@@ -316,7 +328,7 @@ async function doConnect(device) {
       toast('장치가 선택되지 않았습니다 · 터미널 안내를 확인하세요');
       return;
     }
-    termOut(`[연결 실패] ${e.message}\r\n`, 'err');
+    termOut(`[연결 실패] ${e.message}${e.name && e.name !== 'Error' ? ` (${e.name})` : ''}\r\n`, 'err');
     // 자동 모드에서는 다음 시도에 다른 연결 방식(WebUSB ↔ Web Serial)을 사용
     const other = t instanceof UsbCdcTransport ? 'serial' : 'usb';
     const otherOk = other === 'serial' ? SerialTransport.supported : UsbCdcTransport.supported;
