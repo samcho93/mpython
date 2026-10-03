@@ -72,6 +72,14 @@ button:disabled { opacity: .4; cursor: default; }
 .btn.stop { background: var(--stop); color: #fff; border-color: transparent; }
 .mini { border: 1px solid var(--border); background: var(--panel-2); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
 
+.browser-warn {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px;
+  background: #fff3cd; color: #5c4400; border-bottom: 1px solid #f0d78c;
+}
+.browser-warn span { flex: 1; }
+.browser-warn .btn { min-height: 30px; padding: 4px 10px; text-decoration: none; font-size: 13px; }
+.browser-warn .icon-btn { font-size: 16px; color: inherit; }
+
 /* 액션바 */
 .actionbar {
   display: flex; align-items: center; gap: 6px; padding: 6px 8px; overflow-x: auto;

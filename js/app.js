@@ -6,7 +6,7 @@ import { BOARDS, registerBoard, templatesFor } from './boards.js';
 import { Files, Settings } from './storage.js';
 import plugins from './plugins/index.js';
 
-export const VERSION = '1.2.4';
+export const VERSION = '1.2.5';
 
 const $ = (id) => document.getElementById(id);
 const isNarrow = () => window.matchMedia('(max-width: 899px)').matches;
@@ -785,6 +785,24 @@ function setupAutoConnect() {
   }, 500);
 }
 
+// Android 에서 Chrome 이 아닌 브라우저(삼성 인터넷, 카카오톡/네이버 앱 내부 브라우저 등)는
+// navigator.usb 가 있어도 장치 선택 창이 뜨지 않는 경우가 많아 Chrome 으로 열도록 안내
+function checkAndroidBrowser() {
+  if (!IS_ANDROID) return;
+  const ua = navigator.userAgent;
+  const other = ua.match(/SamsungBrowser|KAKAOTALK|NAVER|Whale|Line\/|Instagram|FBAN|FBAV|DaumApps|EdgA|OPR|Firefox|; wv\)/i);
+  if (!other) return;
+  const name = { SamsungBrowser: '삼성 인터넷', KAKAOTALK: '카카오톡', NAVER: '네이버 앱', Whale: '웨일', '; wv)': '앱 내부 브라우저' }[other[0]] || other[0];
+  termOut(`\r\n[주의] 지금 브라우저(${name})에서는 USB 연결이 되지 않을 수 있습니다. Chrome 에서 여세요.\r\n`, 'err');
+  const bar = document.createElement('div');
+  bar.className = 'browser-warn';
+  bar.innerHTML = `<span>${name} 에서는 USB 연결이 안 될 수 있습니다</span><a class="btn connect">Chrome 으로 열기</a><button class="icon-btn" aria-label="닫기">✕</button>`;
+  // intent 링크로 같은 주소를 Chrome 앱에서 엽니다
+  bar.querySelector('a').href = `intent://${location.host}${location.pathname}#Intent;scheme=https;package=com.android.chrome;end`;
+  bar.querySelector('button').onclick = () => bar.remove();
+  document.querySelector('.topbar').after(bar);
+}
+
 // ---------------- 시작 ----------------
 function start() {
   $('appVersion').textContent = 'v' + VERSION;
@@ -815,6 +833,7 @@ function start() {
   if (!SerialTransport.supported && !UsbCdcTransport.supported) {
     termOut('\r\n[알림] 이 브라우저는 USB 연결을 지원하지 않습니다. 편집만 가능합니다.\r\n(Android Chrome 또는 PC Chrome/Edge 권장)\r\n', 'err');
   }
+  checkAndroidBrowser();
 
   setupAutoConnect();
 
